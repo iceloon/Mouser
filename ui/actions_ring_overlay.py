@@ -63,6 +63,8 @@ RING_LABEL_MAP: dict[str, str] = {
     "cycle_desktops":       "Desktops",
     "zoom_in":              "Zoom In",
     "zoom_out":             "Zoom Out",
+    "spotlight_hold":       "Spotlight",
+    "spotlight_toggle":     "Spotlight",
 }
 
 

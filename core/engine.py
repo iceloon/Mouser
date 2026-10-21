@@ -126,6 +126,7 @@ class Engine:
         self._ring_hide_cb = None         # UI callback for hiding ring overlay
         self._ring_sector_cb = None       # UI callback to get current overlay sector
         self._ring_move_cb = None         # UI callback for rawXY deltas → overlay
+        self._spotlight_cb = None          # UI callback for the spotlight overlay
         self._lock = threading.Lock()
         self.hook.set_debug_callback(self._emit_debug)
         self.hook.set_gesture_callback(self._emit_gesture_event)
@@ -373,6 +374,9 @@ class Engine:
                         self.hook.block(evt_type)
                         if is_mouse_button_action(action_id):
                             self.hook.register(evt_type, self._make_mouse_up_handler(action_id))
+                        elif action_id == "spotlight_hold":
+                            # Release ends the highlight (hold-to-light).
+                            self.hook.register(evt_type, self._make_spotlight_up_handler())
                     continue
 
                 if action_id != "none":
@@ -380,6 +384,14 @@ class Engine:
 
                     if "hscroll" in evt_type:
                         self.hook.register(evt_type, self._make_hscroll_handler(action_id))
+                    elif action_id == "spotlight_hold":
+                        if has_up:
+                            self.hook.register(evt_type, self._make_spotlight_down_handler())
+                        else:
+                            # No release event on this control -- a press can
+                            # only toggle, otherwise the shade would stick.
+                            self.hook.register(evt_type,
+                                               self._make_handler("spotlight_toggle", btn_key))
                     elif is_mouse_button_action(action_id):
                         if has_up:
                             # Button has a matching _up event → split press/release
@@ -570,6 +582,34 @@ class Engine:
             except Exception as exc:
                 print(f"[Engine] mouse_up_handler EXCEPTION for {action_id}: {exc}")
                 import traceback; traceback.print_exc()
+        return handler
+
+    def _make_spotlight_down_handler(self):
+        """Press → light the spotlight (hold mode)."""
+        def handler(event):
+            try:
+                if not self._enabled:
+                    return
+                self._emit_debug(
+                    f"Mapped {event.event_type} -> spotlight_hold (show)"
+                )
+                self._emit_spotlight("show")
+            except Exception as exc:
+                print(f"[Engine] spotlight_down_handler EXCEPTION: {exc}")
+        return handler
+
+    def _make_spotlight_up_handler(self):
+        """Release → drop the spotlight (hold mode)."""
+        def handler(event):
+            try:
+                if not self._enabled:
+                    return
+                self._emit_debug(
+                    f"Mapped {event.event_type} -> spotlight_hold (hide)"
+                )
+                self._emit_spotlight("hide")
+            except Exception as exc:
+                print(f"[Engine] spotlight_up_handler EXCEPTION: {exc}")
         return handler
 
     def _toggle_smart_shift(self, btn_key=""):
@@ -987,6 +1027,29 @@ class Engine:
         """Register ``cb(dx, dy)`` invoked for rawXY deltas during held ring."""
         self._ring_move_cb = cb
 
+    # ------------------------------------------------------------------
+    # Spotlight overlay (presentation highlight)
+    # ------------------------------------------------------------------
+
+    def set_spotlight_callback(self, cb):
+        """Register ``cb(action)`` for the screen spotlight overlay.
+
+        ``action`` is one of ``"show"``, ``"hide"`` or ``"toggle"``.  The
+        callback runs on the HID/hook thread, so the UI side must marshal it
+        back to the Qt main thread (the backend does this with a queued
+        signal).
+        """
+        self._spotlight_cb = cb
+
+    def _emit_spotlight(self, action):
+        cb = self._spotlight_cb
+        if cb is None:
+            return
+        try:
+            cb(action)
+        except Exception as exc:
+            print(f"[Engine] spotlight callback error: {exc}")
+
     def _on_ring_move(self, dx, dy):
         """Called by the ring controller to forward rawXY deltas to the UI."""
         if self._ring_move_cb:
@@ -1065,6 +1128,12 @@ class Engine:
             self._cycle_dpi(source_key)
         elif action_id == "cycle_desktops":
             self._cycle_desktops()
+        elif action_id == "spotlight_toggle":
+            self._emit_spotlight("toggle")
+        elif action_id == "spotlight_hold":
+            # Reached only for single-fire controls (gesture / swipe / ring);
+            # paired press+release controls use the down/up handlers instead.
+            self._emit_spotlight("show")
         else:
             execute_action(action_id)
 

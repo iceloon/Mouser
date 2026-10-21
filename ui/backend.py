@@ -246,6 +246,8 @@ class Backend(QObject):
     deviceLayoutChanged = Signal()
     hapticChanged = Signal()
     forceSensingChanged = Signal()
+    spotlightActiveChanged = Signal()
+    spotlightSettingsChanged = Signal()
     knownAppsChanged = Signal()
     updateAvailable = Signal(str, str)
     updateInstallChanged = Signal()
@@ -267,6 +269,9 @@ class Backend(QObject):
     _showRingRequest = Signal(list, bool)
     _hideRingRequest = Signal()
     _superKeyHeldRequest = Signal(bool)
+    _spotlightShowRequest = Signal()
+    _spotlightHideRequest = Signal()
+    _spotlightToggleRequest = Signal()
 
     def __init__(self, engine=None, parent=None, root_dir=None):
         super().__init__(parent)
@@ -363,6 +368,12 @@ class Backend(QObject):
             self._handleShowRing, Qt.QueuedConnection)
         self._hideRingRequest.connect(
             self._handleHideRing, Qt.QueuedConnection)
+        self._spotlightShowRequest.connect(
+            self._handleSpotlightShow, Qt.QueuedConnection)
+        self._spotlightHideRequest.connect(
+            self._handleSpotlightHide, Qt.QueuedConnection)
+        self._spotlightToggleRequest.connect(
+            self._handleSpotlightToggle, Qt.QueuedConnection)
         self._superKeyHeldRequest.connect(
             self._handleSuperKeyHeld, Qt.QueuedConnection)
 
@@ -375,6 +386,8 @@ class Backend(QObject):
         self._ring_overlay = None  # created lazily on first show
         self._ring_visible = False  # thread-safe flag (avoids Qt isVisible() off main thread)
         self._ring_edit_profile = ""  # profile targeted by the ring editor (per-app mode)
+        self._spotlight_overlay = None  # created lazily on first toggle
+        self._spotlight_preview_timer = None
 
         # List-property cache invalidation. Each notify signal maps to the
         # subset of caches that depends on it; reads after the next emit
@@ -408,6 +421,8 @@ class Backend(QObject):
                 engine.set_ring_sector_callback(self._getRingCurrentSector)
             if hasattr(engine, "set_ring_move_callback"):
                 engine.set_ring_move_callback(self._onEngineRingMove)
+            if hasattr(engine, "set_spotlight_callback"):
+                engine.set_spotlight_callback(self._onEngineSpotlight)
             self._mouse_connected = bool(getattr(engine, "device_connected", False))
             self._hid_features_ready = bool(
                 getattr(engine, "hid_features_ready", False)
@@ -1990,6 +2005,159 @@ class Backend(QObject):
                 "actionLabel": _action_label(aid),
             })
         return result
+
+    # ── Spotlight overlay (presentation highlight) ──────────────────────
+
+    _SPOTLIGHT_DEFAULT_RADIUS = 220
+    _SPOTLIGHT_DEFAULT_DIM = 0.55
+    _SPOTLIGHT_DEFAULT_MODE = "spotlight"
+    _SPOTLIGHT_DEFAULT_COLOR = "#00d4aa"
+    _SPOTLIGHT_DEFAULT_RING = 3
+
+    def _onEngineSpotlight(self, action):
+        """Engine callback (HID thread) — bounce to the Qt main thread."""
+        if action == "hide":
+            self._spotlightHideRequest.emit()
+        elif action == "toggle":
+            self._spotlightToggleRequest.emit()
+        else:
+            self._spotlightShowRequest.emit()
+
+    def _spotlight_settings(self):
+        settings = self._cfg.get("settings", {})
+        return {
+            "radius": int(settings.get("spotlight_radius",
+                                       self._SPOTLIGHT_DEFAULT_RADIUS)),
+            "dim": float(settings.get("spotlight_dim",
+                                      self._SPOTLIGHT_DEFAULT_DIM)),
+            "mode": str(settings.get("spotlight_mode",
+                                     self._SPOTLIGHT_DEFAULT_MODE)),
+            "color": str(settings.get("spotlight_color",
+                                      self._SPOTLIGHT_DEFAULT_COLOR)),
+            "ring_width": int(settings.get("spotlight_ring_width",
+                                           self._SPOTLIGHT_DEFAULT_RING)),
+        }
+
+    def _ensure_spotlight_overlay(self):
+        if self._spotlight_overlay is None:
+            from ui.spotlight_overlay import SpotlightOverlay
+            overlay = SpotlightOverlay()
+            overlay.active_changed.connect(self._onSpotlightActiveChanged)
+            self._spotlight_overlay = overlay
+            self._apply_spotlight_style()
+        return self._spotlight_overlay
+
+    def _apply_spotlight_style(self):
+        overlay = self._spotlight_overlay
+        if overlay is None:
+            return
+        spec = self._spotlight_settings()
+        overlay.configure(radius=spec["radius"], dim=spec["dim"],
+                          mode=spec["mode"], color=spec["color"],
+                          ring_width=spec["ring_width"])
+
+    def _onSpotlightActiveChanged(self, _active):
+        self._spotlight_preview_timer = None
+        self.spotlightActiveChanged.emit()
+
+    def _handleSpotlightShow(self):
+        overlay = self._ensure_spotlight_overlay()
+        if overlay.active:
+            # A second press while lit behaves like a toggle, so a control
+            # without a release event can never leave the shade stuck.
+            overlay.hide_overlay()
+        else:
+            overlay.show_overlay()
+
+    def _handleSpotlightHide(self):
+        if self._spotlight_overlay is not None:
+            self._spotlight_overlay.hide_overlay()
+
+    def _handleSpotlightToggle(self):
+        self._ensure_spotlight_overlay().toggle()
+
+    def _end_spotlight_preview(self):
+        self._spotlight_preview_timer = None
+        if self._spotlight_overlay is not None:
+            self._spotlight_overlay.hide_overlay()
+
+    @Property(bool, constant=True)
+    def spotlightAvailable(self):
+        """The built-in overlay renderer is always available."""
+        return True
+
+    @Property(bool, notify=spotlightActiveChanged)
+    def spotlightActive(self):
+        return bool(self._spotlight_overlay is not None
+                    and self._spotlight_overlay.active)
+
+    @Property(int, notify=spotlightSettingsChanged)
+    def spotlightRadius(self):
+        return self._spotlight_settings()["radius"]
+
+    @Property(float, notify=spotlightSettingsChanged)
+    def spotlightDim(self):
+        return self._spotlight_settings()["dim"]
+
+    @Property(str, notify=spotlightSettingsChanged)
+    def spotlightMode(self):
+        return self._spotlight_settings()["mode"]
+
+    @Property(str, notify=spotlightSettingsChanged)
+    def spotlightColor(self):
+        return self._spotlight_settings()["color"]
+
+    @Property(int, notify=spotlightSettingsChanged)
+    def spotlightRingWidth(self):
+        return self._spotlight_settings()["ring_width"]
+
+    def _store_spotlight_setting(self, key, value):
+        self._cfg.setdefault("settings", {})[key] = value
+        save_config(self._cfg)
+        self._apply_spotlight_style()
+        self.spotlightSettingsChanged.emit()
+
+    @Slot(int)
+    def setSpotlightRadius(self, value):
+        self._store_spotlight_setting(
+            "spotlight_radius", max(20, min(1200, int(value))))
+
+    @Slot(float)
+    def setSpotlightDim(self, value):
+        self._store_spotlight_setting(
+            "spotlight_dim", round(max(0.0, min(0.95, float(value))), 2))
+
+    @Slot(str)
+    def setSpotlightMode(self, value):
+        mode = value if value in ("spotlight", "laser") else "spotlight"
+        self._store_spotlight_setting("spotlight_mode", mode)
+
+    @Slot(str)
+    def setSpotlightColor(self, value):
+        from PySide6.QtGui import QColor
+        color = QColor(value)
+        if not color.isValid():
+            return
+        self._store_spotlight_setting("spotlight_color", color.name())
+
+    @Slot(int)
+    def setSpotlightRingWidth(self, value):
+        self._store_spotlight_setting(
+            "spotlight_ring_width", max(0, min(12, int(value))))
+
+    @Slot()
+    def toggleSpotlight(self):
+        self._handleSpotlightToggle()
+
+    @Slot()
+    def previewSpotlight(self):
+        """Light the overlay for 2.5 s so the current style can be judged."""
+        overlay = self._ensure_spotlight_overlay()
+        overlay.show_overlay()
+        self._spotlight_preview_timer = QTimer(self)
+        self._spotlight_preview_timer.setSingleShot(True)
+        self._spotlight_preview_timer.timeout.connect(self._end_spotlight_preview)
+        self._spotlight_preview_timer.start(2500)
 
     @Slot(str, result=str)
     def actionLabelFor(self, actionId):

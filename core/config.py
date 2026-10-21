@@ -297,6 +297,12 @@ DEFAULT_CONFIG = {
         "actions_ring_hover_haptic": True,
         "actions_ring_use_global": True,
         "actions_ring_slots": _default_actions_ring_slots(),
+        # Presentation spotlight overlay (Spotlight presenter / any button)
+        "spotlight_radius": 220,            # hole radius in screen pixels
+        "spotlight_dim": 0.55,              # 0-0.95 shade darkness
+        "spotlight_mode": "spotlight",      # "spotlight" (shade + hole) or "laser"
+        "spotlight_color": "#00d4aa",       # ring / laser dot colour
+        "spotlight_ring_width": 3,          # 0 hides the ring
     },
 }
 

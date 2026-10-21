@@ -44,6 +44,9 @@ ApplicationWindow {
         if (backend.hapticSupported) {
             items.push({ icon: "circle", tipKey: "nav.haptic_feedback", page: 2 })
         }
+        if (backend.spotlightAvailable) {
+            items.push({ icon: "spotlight", tipKey: "nav.spotlight", page: 4 })
+        }
         // The ring itself runs on any device that has a button mapped to it
         // (see core/engine.py), so gate its config page on the mapping alone.
         if (backend.actionsRingActive) {
@@ -291,6 +294,10 @@ ApplicationWindow {
             Loader {
                 active: (root.currentPage === 3 || item) && backend.actionsRingActive
                 source: "ActionsRingConfig.qml"
+            }
+            Loader {
+                active: root.currentPage === 4 || item
+                source: "SpotlightPage.qml"
             }
         }
     }

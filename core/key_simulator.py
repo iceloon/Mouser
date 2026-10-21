@@ -1880,3 +1880,26 @@ else:
             "category": "Other",
         },
     }
+
+# ---------------------------------------------------------------------------
+# Presentation spotlight overlay (Spotlight presenter and any other device)
+#
+# These actions carry no key sequence: the Engine intercepts them in
+# _dispatch_action() and drives ui/spotlight_overlay.py instead.  They are
+# registered here so they show up in the action pickers on every platform.
+# ---------------------------------------------------------------------------
+_PRESENTATION_ACTIONS = {
+    "spotlight_hold": {
+        "label": "Spotlight (hold to highlight)",
+        "keys": [],
+        "category": "Presentation",
+    },
+    "spotlight_toggle": {
+        "label": "Spotlight (toggle highlight)",
+        "keys": [],
+        "category": "Presentation",
+    },
+}
+
+for _action_id, _action_spec in _PRESENTATION_ACTIONS.items():
+    ACTIONS.setdefault(_action_id, dict(_action_spec))
