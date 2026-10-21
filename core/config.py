@@ -258,6 +258,10 @@ DEFAULT_CONFIG = {
                 # and every button's "_tap" key.)
                 **{key: "none" for key in GESTURE_SWIPE_SEED_KEYS},
                 "thumb_button": "none",
+                # Presenter (Logitech Spotlight). "none" keeps the native
+                # arrow-key behaviour; any action takes over that button.
+                "presenter_next": "none",
+                "presenter_prev": "none",
                 "actions_ring_slots": _default_actions_ring_slots(),
             },
             "button_haptic": {},  # per-button haptic override; absent key = enabled (True)
@@ -303,6 +307,10 @@ DEFAULT_CONFIG = {
         "spotlight_mode": "spotlight",      # "spotlight" (shade + hole) or "laser"
         "spotlight_color": "#00d4aa",       # ring / laser dot colour
         "spotlight_ring_width": 3,          # 0 hides the ring
+        # Logitech Spotlight presenter
+        "presenter_enabled": True,          # honour the remote when connected
+        "presenter_pointer_overlay": True,  # pointer key lights the overlay
+        "presenter_takeover_keys": False,   # swallow Left/Right arrows (opt-in)
     },
 }
 

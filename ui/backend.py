@@ -248,6 +248,7 @@ class Backend(QObject):
     forceSensingChanged = Signal()
     spotlightActiveChanged = Signal()
     spotlightSettingsChanged = Signal()
+    presenterChanged = Signal()
     knownAppsChanged = Signal()
     updateAvailable = Signal(str, str)
     updateInstallChanged = Signal()
@@ -272,6 +273,7 @@ class Backend(QObject):
     _spotlightShowRequest = Signal()
     _spotlightHideRequest = Signal()
     _spotlightToggleRequest = Signal()
+    _presenterStateRequest = Signal(object)
 
     def __init__(self, engine=None, parent=None, root_dir=None):
         super().__init__(parent)
@@ -374,6 +376,8 @@ class Backend(QObject):
             self._handleSpotlightHide, Qt.QueuedConnection)
         self._spotlightToggleRequest.connect(
             self._handleSpotlightToggle, Qt.QueuedConnection)
+        self._presenterStateRequest.connect(
+            self._handlePresenterState, Qt.QueuedConnection)
         self._superKeyHeldRequest.connect(
             self._handleSuperKeyHeld, Qt.QueuedConnection)
 
@@ -388,6 +392,7 @@ class Backend(QObject):
         self._ring_edit_profile = ""  # profile targeted by the ring editor (per-app mode)
         self._spotlight_overlay = None  # created lazily on first toggle
         self._spotlight_preview_timer = None
+        self._presenter_state = None  # last Spotlight detection result
 
         # List-property cache invalidation. Each notify signal maps to the
         # subset of caches that depends on it; reads after the next emit
@@ -423,6 +428,8 @@ class Backend(QObject):
                 engine.set_ring_move_callback(self._onEngineRingMove)
             if hasattr(engine, "set_spotlight_callback"):
                 engine.set_spotlight_callback(self._onEngineSpotlight)
+            if hasattr(engine, "set_presenter_state_callback"):
+                engine.set_presenter_state_callback(self._onEnginePresenterState)
             self._mouse_connected = bool(getattr(engine, "device_connected", False))
             self._hid_features_ready = bool(
                 getattr(engine, "hid_features_ready", False)
@@ -2158,6 +2165,67 @@ class Backend(QObject):
         self._spotlight_preview_timer.setSingleShot(True)
         self._spotlight_preview_timer.timeout.connect(self._end_spotlight_preview)
         self._spotlight_preview_timer.start(2500)
+
+    # ── Presenter (Logitech Spotlight remote) ───────────────────────────
+
+    def _onEnginePresenterState(self, status):
+        """Engine callback (detector thread) — bounce to the Qt main thread."""
+        self._presenterStateRequest.emit(status)
+
+    def _handlePresenterState(self, status):
+        self._presenter_state = status if isinstance(status, dict) else None
+        self.presenterChanged.emit()
+
+    @Property(bool, notify=presenterChanged)
+    def presenterConnected(self):
+        return bool(self._presenter_state)
+
+    @Property(str, notify=presenterChanged)
+    def presenterName(self):
+        return (self._presenter_state or {}).get("name", "")
+
+    @Property(str, notify=presenterChanged)
+    def presenterTransport(self):
+        return (self._presenter_state or {}).get("transport", "")
+
+    @Property(bool, notify=presenterChanged)
+    def presenterEnabled(self):
+        return bool(self._cfg.get("settings", {}).get("presenter_enabled", True))
+
+    @Property(bool, notify=presenterChanged)
+    def presenterPointerOverlay(self):
+        return bool(self._cfg.get("settings", {}).get("presenter_pointer_overlay", True))
+
+    @Property(bool, notify=presenterChanged)
+    def presenterTakeoverKeys(self):
+        return bool(self._cfg.get("settings", {}).get("presenter_takeover_keys", False))
+
+    def _store_presenter_setting(self, key, value):
+        self._cfg.setdefault("settings", {})[key] = bool(value)
+        save_config(self._cfg)
+        if self._engine is not None and hasattr(self._engine, "refresh_presenter"):
+            try:
+                self._engine.refresh_presenter()
+            except Exception as exc:
+                print(f"[Backend] refresh_presenter failed: {exc}")
+        self.presenterChanged.emit()
+
+    @Slot(bool)
+    def setPresenterEnabled(self, value):
+        self._store_presenter_setting("presenter_enabled", value)
+
+    @Slot(bool)
+    def setPresenterPointerOverlay(self, value):
+        self._store_presenter_setting("presenter_pointer_overlay", value)
+
+    @Slot(bool)
+    def setPresenterTakeoverKeys(self, value):
+        self._store_presenter_setting("presenter_takeover_keys", value)
+
+    @Slot(str, result=str)
+    def presenterAction(self, key):
+        from core.config import get_active_mappings
+        return get_active_mappings(self._cfg).get(key, "none")
 
     @Slot(str, result=str)
     def actionLabelFor(self, actionId):

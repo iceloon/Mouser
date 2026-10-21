@@ -44,14 +44,20 @@ ApplicationWindow {
         if (backend.hapticSupported) {
             items.push({ icon: "circle", tipKey: "nav.haptic_feedback", page: 2 })
         }
-        if (backend.spotlightAvailable) {
-            items.push({ icon: "spotlight", tipKey: "nav.spotlight", page: 4 })
-        }
         // The ring itself runs on any device that has a button mapped to it
         // (see core/engine.py), so gate its config page on the mapping alone.
         if (backend.actionsRingActive) {
             items.push({ icon: "target", tipKey: "nav.actions_ring", page: 3 })
         }
+        if (backend.spotlightAvailable) {
+            items.push({ icon: "spotlight", tipKey: "nav.spotlight", page: 4 })
+        }
+        if (backend.presenterConnected) {
+            items.push({ icon: "presenter", tipKey: "nav.presenter", page: 5 })
+        }
+        // Sidebar highlight binds currentIndex to the page number, so the
+        // visual order has to match the page/loader order.
+        items.sort(function (a, b) { return a.page - b.page })
         return items
     }
 
@@ -298,6 +304,10 @@ ApplicationWindow {
             Loader {
                 active: root.currentPage === 4 || item
                 source: "SpotlightPage.qml"
+            }
+            Loader {
+                active: (root.currentPage === 5 || item) && backend.presenterConnected
+                source: "PresenterPage.qml"
             }
         }
     }

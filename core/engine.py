@@ -127,6 +127,13 @@ class Engine:
         self._ring_sector_cb = None       # UI callback to get current overlay sector
         self._ring_move_cb = None         # UI callback for rawXY deltas → overlay
         self._spotlight_cb = None          # UI callback for the spotlight overlay
+        self._presenter_status = None      # last Spotlight detection result
+        self._presenter_state_cb = None    # UI callback for presenter connection
+        self._presenter_watcher = None     # Raw Input pointer watcher
+        self._presenter_key_hook = None    # optional arrow-key takeover
+        self._presenter_mod = None
+        self._presenter_stop = threading.Event()
+        self._presenter_thread = None
         self._lock = threading.Lock()
         self.hook.set_debug_callback(self._emit_debug)
         self.hook.set_gesture_callback(self._emit_gesture_event)
@@ -1050,6 +1057,119 @@ class Engine:
         except Exception as exc:
             print(f"[Engine] spotlight callback error: {exc}")
 
+    # ------------------------------------------------------------------
+    # Presenter (Logitech Spotlight remote)
+    # ------------------------------------------------------------------
+
+    def set_presenter_state_callback(self, cb):
+        """Register ``cb(status_or_None)`` for presenter connection changes."""
+        self._presenter_state_cb = cb
+
+    @property
+    def presenter_status(self):
+        return self._presenter_status
+
+    def _presenter_settings(self):
+        settings = self.cfg.get("settings", {})
+        return {
+            "enabled": bool(settings.get("presenter_enabled", True)),
+            "pointer_overlay": bool(settings.get("presenter_pointer_overlay", True)),
+            "takeover_keys": bool(settings.get("presenter_takeover_keys", False)),
+        }
+
+    def _emit_presenter_state(self, status):
+        cb = self._presenter_state_cb
+        if cb is None:
+            return
+        try:
+            cb(status)
+        except Exception as exc:
+            print(f"[Engine] presenter callback error: {exc}")
+
+    def _start_presenter_support(self):
+        try:
+            from core import presenter as presenter_mod
+        except Exception as exc:
+            print(f"[Engine] presenter support unavailable: {exc}")
+            return
+        self._presenter_mod = presenter_mod
+        self._presenter_stop.clear()
+        self._presenter_thread = threading.Thread(
+            target=self._presenter_loop, name="PresenterDetect", daemon=True)
+        self._presenter_thread.start()
+
+    def _presenter_loop(self):
+        last = object()  # sentinel: force the first status emit
+        while not self._presenter_stop.is_set():
+            try:
+                status = self._presenter_mod.detect_connected_presenter()
+            except Exception:
+                status = None
+            if status != last:
+                last = status
+                self._presenter_status = status
+                self._sync_presenter_runtime(status)
+                self._emit_presenter_state(status)
+            self._presenter_stop.wait(8.0)
+
+    def _sync_presenter_runtime(self, status):
+        settings = self._presenter_settings()
+        want = bool(status) and settings["enabled"]
+        if not want:
+            self._stop_presenter_runtime()
+            return
+        if self._presenter_watcher is None:
+            watcher = self._presenter_mod.PresenterWatcher(self._on_presenter_pointer)
+            if watcher.start():
+                self._presenter_watcher = watcher
+        if settings["takeover_keys"]:
+            if self._presenter_key_hook is None:
+                hook = self._presenter_mod.PresenterKeyHook(
+                    on_next=lambda: self._dispatch_presenter_action("presenter_next"),
+                    on_prev=lambda: self._dispatch_presenter_action("presenter_prev"),
+                )
+                hook.start()
+                self._presenter_key_hook = hook
+            self._presenter_key_hook.set_enabled(True)
+        elif self._presenter_key_hook is not None:
+            self._presenter_key_hook.set_enabled(False)
+
+    def _stop_presenter_runtime(self):
+        if self._presenter_watcher is not None:
+            try:
+                self._presenter_watcher.stop()
+            except Exception:
+                pass
+            self._presenter_watcher = None
+        if self._presenter_key_hook is not None:
+            try:
+                self._presenter_key_hook.stop()
+            except Exception:
+                pass
+            self._presenter_key_hook = None
+
+    def _on_presenter_pointer(self, down):
+        settings = self._presenter_settings()
+        if not settings["enabled"] or not settings["pointer_overlay"]:
+            return
+        self._emit_spotlight("show" if down else "hide")
+
+    def _dispatch_presenter_action(self, mapping_key):
+        """Run the action bound to a presenter button; False = pass through."""
+        try:
+            action_id = get_active_mappings(self.cfg).get(mapping_key, "none")
+        except Exception:
+            return False
+        if not action_id or action_id == "none":
+            return False
+        self._emit_debug(f"Presenter {mapping_key} -> {action_id}")
+        self._dispatch_action(action_id, mapping_key)
+        return True
+
+    def refresh_presenter(self):
+        """Re-apply presenter settings (called after the UI toggles them)."""
+        self._sync_presenter_runtime(self._presenter_status)
+
     def _on_ring_move(self, dx, dy):
         """Called by the ring controller to forward rawXY deltas to the UI."""
         if self._ring_move_cb:
@@ -1684,6 +1804,7 @@ class Engine:
         self._emit_linux_permission_warning()
         self.hook.start()
         self._app_detector.start()
+        self._start_presenter_support()
         # Temporary safety-net: keep the old delayed replay path until the
         # hid-ready transition path has proven out in the field.
         def _startup_replay_fallback():
@@ -1702,6 +1823,11 @@ class Engine:
         self._smart_shift_read_cb = cb
 
     def stop(self):
+        self._presenter_stop.set()
+        if self._presenter_thread is not None:
+            self._presenter_thread.join(timeout=2)
+            self._presenter_thread = None
+        self._stop_presenter_runtime()
         if self._ring:
             self._ring.shutdown()
             self._ring = None

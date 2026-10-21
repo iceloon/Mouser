@@ -14,6 +14,7 @@ _TRANSLATIONS = {
         "nav.haptic_feedback": "Haptic Feedback",
         "nav.actions_ring": "Actions Ring",
         "nav.spotlight": "Spotlight",
+        "nav.presenter": "Presenter",
         "nav.about": "About",
 
         # Spotlight page
@@ -31,6 +32,22 @@ _TRANSLATIONS = {
         "spotlight.dim": "Background shade",
         "spotlight.ring": "Ring thickness",
         "spotlight.color": "Colour",
+
+        # Presenter page
+        "presenter.title": "Presenter",
+        "presenter.subtitle": "Logitech Spotlight remote — pointer key, page keys and connection state",
+        "presenter.bluetooth": "Bluetooth",
+        "presenter.usb": "USB receiver",
+        "presenter.not_connected": "No presenter detected",
+        "presenter.status_hint": "Plug the receiver (or pair over Bluetooth) and the remote is picked up automatically — no Logi Options+ required.",
+        "presenter.enabled": "Handle this presenter",
+        "presenter.pointer": "Pointer key lights the spotlight",
+        "presenter.pointer_desc": "While the pointer key is held, the screen dims and the hole follows the remote.",
+        "presenter.takeover": "Take over the arrow keys",
+        "presenter.takeover_desc": "Next/Back send Left/Right arrows. Windows cannot tell which device sent a key, so this is global while enabled — leave it off if you use the arrow keys for other apps.",
+        "presenter.mapping_title": "Button actions (only used while takeover is on)",
+        "presenter.next": "Next",
+        "presenter.prev": "Back",
 
         # Haptic Feedback page
         "haptic.title": "Haptic Feedback",
@@ -309,6 +326,7 @@ _TRANSLATIONS = {
         "nav.point_scroll": "\u901a\u7528",
         "nav.haptic_feedback": "\u89e6\u89c9\u53cd\u9988",
         "nav.spotlight": "聚光灯",
+        "nav.presenter": "演示器",
 
         "spotlight.title": "聚光灯",
         "spotlight.subtitle": "跟随指针的穿透式高亮遮罩，无需安装 Logi Options+",
@@ -324,6 +342,21 @@ _TRANSLATIONS = {
         "spotlight.dim": "背景压暗",
         "spotlight.ring": "圆环粗细",
         "spotlight.color": "颜色",
+
+        "presenter.title": "演示器",
+        "presenter.subtitle": "罗技 Spotlight 遥控器：指针键、翻页键与连接状态",
+        "presenter.bluetooth": "蓝牙",
+        "presenter.usb": "USB 接收器",
+        "presenter.not_connected": "未检测到演示器",
+        "presenter.status_hint": "插上接收器（或用蓝牙配对）后会自动识别，不需要安装 Logi Options+。",
+        "presenter.enabled": "启用该演示器",
+        "presenter.pointer": "指针键点亮聚光灯",
+        "presenter.pointer_desc": "按住指针键时整屏压暗，光斑跟随遥控器移动。",
+        "presenter.takeover": "接管方向键",
+        "presenter.takeover_desc": "Next/Back 发送的是左右方向键。Windows 无法区分按键来自哪个设备，所以开启后全局生效——其他应用也用方向键的话建议保持关闭。",
+        "presenter.mapping_title": "按键动作（仅在接管开启时生效）",
+        "presenter.next": "下一页",
+        "presenter.prev": "上一页",
 
         "haptic.title": "\u89e6\u89c9\u53cd\u9988",
         "haptic.subtitle": "\u914d\u7f6e MX Master 4 \u7684\u89e6\u89c9\u9a6c\u8fbe",
@@ -587,6 +620,7 @@ _TRANSLATIONS = {
         "nav.point_scroll": "\u901a\u7528",
         "nav.haptic_feedback": "\u89f8\u89ba\u56de\u994b",
         "nav.spotlight": "聚光燈",
+        "nav.presenter": "簡報器",
 
         "spotlight.title": "聚光燈",
         "spotlight.subtitle": "跟隨指標的穿透式高亮遮罩，無需安裝 Logi Options+",
@@ -602,6 +636,21 @@ _TRANSLATIONS = {
         "spotlight.dim": "背景壓暗",
         "spotlight.ring": "圓環粗細",
         "spotlight.color": "顏色",
+
+        "presenter.title": "簡報器",
+        "presenter.subtitle": "羅技 Spotlight 簡報器：指標鍵、翻頁鍵與連線狀態",
+        "presenter.bluetooth": "藍牙",
+        "presenter.usb": "USB 接收器",
+        "presenter.not_connected": "未偵測到簡報器",
+        "presenter.status_hint": "插上接收器（或用藍牙配對）後會自動辨識，不需要安裝 Logi Options+。",
+        "presenter.enabled": "啟用此簡報器",
+        "presenter.pointer": "指標鍵點亮聚光燈",
+        "presenter.pointer_desc": "按住指標鍵時整屏壓暗，光斑跟隨簡報器移動。",
+        "presenter.takeover": "接管方向鍵",
+        "presenter.takeover_desc": "Next/Back 送出的是左右方向鍵。Windows 無法區分按鍵來自哪個裝置，因此開啟後是全域生效——其他應用也會用方向鍵時建議保持關閉。",
+        "presenter.mapping_title": "按鍵動作（僅在接管開啟時生效）",
+        "presenter.next": "下一頁",
+        "presenter.prev": "上一頁",
 
         "haptic.title": "\u89f8\u89ba\u56de\u994b",
         "haptic.subtitle": "\u8a2d\u5b9a MX Master 4 \u7684\u89f8\u89ba\u99ac\u9054",
