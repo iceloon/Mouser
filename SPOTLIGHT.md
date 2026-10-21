@@ -102,10 +102,51 @@ python -m unittest tests.test_spotlight -v
 QT_QPA_PLATFORM=offscreen python -m unittest tests.test_spotlight_overlay -v
 ```
 
-## 8. 后续 TODO
+## 8. 演示器支持（B 档）
 
-- [ ] 演示器设备识别（按 VID/PID 与接收器槽位），在设备卡片里显示"Spotlight"
+除了覆盖层，这一版还接入了罗技 Spotlight 遥控器本身。
+
+**设备形态**（抓包/参考实现确认）：Spotlight 不是 HID++ 鼠标，它对外就是一个
+普通键盘 + 普通鼠标：
+
+| 按键 | 实际发出的事件 |
+|---|---|
+| Next | `VK_RIGHT`（右方向键） |
+| Back | `VK_LEFT`（左方向键） |
+| Pointer（按住） | `BTN_LEFT` 按下 + 鼠标相对移动 |
+
+所以它无法走 Mouser 的 REPROG_CONTROLS divert 路径，需要单独一层：
+
+| 文件 | 作用 |
+|---|---|
+| `core/presenter.py` | PID 表（`0xC53E`/`0xB503`，Spotlight 2 为 `0xC548`/`0xB506`）；Raw Input 监视鼠标集合，按**设备路径**判定来源；可选的 `WH_KEYBOARD_LL` 钩子接管方向键 |
+| `core/engine.py` | 检测线程（8 秒一轮）、指针键 → 覆盖层、按键动作派发、start/stop 生命周期 |
+| `core/config.py` | `presenter_enabled` / `presenter_pointer_overlay` / `presenter_takeover_keys`；映射键 `presenter_next` / `presenter_prev` |
+| `ui/backend.py` | 连接状态、开关、映射读写 |
+| `ui/qml/PresenterPage.qml` | 状态卡、行为开关、两个按键的动作下拉框 |
+
+**行为约定：**
+
+- 指针键按下只点亮覆盖层，不拦截任何输入（指针键同时会发左键，向下传递）
+- 方向键接管默认**关闭**；打开后也只在对应按键绑定了动作时才吞键，没绑定就原样放行
+- Windows 无法把低级键盘事件归属到设备，因此接管是全局的——页面上有明确警告
+
+## 9. 已知限制
+
+- **指针键会附带一次左键点击**：PowerPoint 放映中左键=下一页，所以按指针键可能顺带翻页。
+  下一步用鼠标钩子 + Raw Input 关联把它吞掉（Mouser 现有代码里已有设备名判定）。
+- 方向键接管全局生效（见上）
+- 覆盖层是普通置顶窗口，盖不住 DirectX 独占全屏
+- 不隐藏系统光标（Options+ 会）
+
+## 10. 后续 TODO
+
+- [x] 演示器设备识别（PID + USB/蓝牙）
+- [x] 指针键点亮聚光灯
+- [x] Next/Back 可绑定动作（可选接管）
+- [ ] 吞掉指针键附带的左键点击
 - [ ] HID++ `0x1A00` / `0x1A01` 直读运动数据，自己画指针（不依赖系统光标）
 - [ ] 放大镜模式（抓屏 + 放大）
 - [ ] 演示计时器（到点震动，复用 haptic 通道）
 - [ ] 光斑形状选择（圆形/椭圆/矩形）与动画淡入淡出
+
